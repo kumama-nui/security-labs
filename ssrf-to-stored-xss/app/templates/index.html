@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>SSRF / Stored XSS Lab</h1>
+<p>Seeded users (password: <code>password123</code>): <code>alice</code>, <code>bob</code></p>
+<h2>Users</h2>
+<ul>
+  {% for u in users %}
+    <li><a href="{{ url_for('profile', user_id=u['id']) }}">{{ u['display_name'] }}</a> (@{{ u['username'] }})</li>
+  {% endfor %}
+</ul>
+{% endblock %}

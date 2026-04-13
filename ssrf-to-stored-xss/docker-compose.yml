@@ -1,0 +1,37 @@
+services:
+  app:
+    build: ./app
+    container_name: ssrfxss-app
+    ports:
+      - "5080:5000"
+    networks:
+      - labnet
+    depends_on:
+      - internal-service
+    environment:
+      - FLASK_ENV=development
+      - SECRET_KEY=lab-insecure-key-do-not-use
+    restart: unless-stopped
+
+  attacker-server:
+    build: ./attacker-server
+    container_name: ssrfxss-attacker
+    ports:
+      - "5081:80"
+    networks:
+      - labnet
+    restart: unless-stopped
+
+  internal-service:
+    build: ./internal-service
+    container_name: ssrfxss-internal
+    # No host port mapping — only reachable from inside the lab network (SSRF target)
+    expose:
+      - "5000"
+    networks:
+      - labnet
+    restart: unless-stopped
+
+networks:
+  labnet:
+    driver: bridge

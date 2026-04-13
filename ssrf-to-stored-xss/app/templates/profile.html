@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ user['display_name'] }}</h1>
+<p>@{{ user['username'] }}</p>
+
+{# VULN (CWE-79): profile_picture rendered unescaped inside an attribute.
+   Attacker payload like:  x" onerror="alert('XSS')
+   will break out of the src attribute and fire onerror. #}
+<img class="avatar" src="{{ user['profile_picture']|safe }}" alt="avatar">
+
+<h2>bio</h2>
+<p>{{ user['bio'] }}</p>
+
+<p><small>profile picture URL (raw): <code>{{ user['profile_picture'] }}</code></small></p>
+{% endblock %}

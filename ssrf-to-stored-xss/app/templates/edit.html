@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Edit profile</h1>
+<form method="post" action="{{ url_for('edit_post') }}">
+  <label>display name
+    <input type="text" name="display_name" value="{{ user['display_name'] or '' }}">
+  </label>
+  <label>bio
+    <textarea name="bio" rows="3">{{ user['bio'] or '' }}</textarea>
+  </label>
+  <label>profile picture URL
+    <input type="text" name="profile_picture" value="{{ user['profile_picture'] or '' }}">
+  </label>
+  <p><button type="submit">save</button></p>
+</form>
+
+<h2>API hint</h2>
+<pre>PATCH /api/profile
+Content-Type: application/json
+Cookie: session=...
+
+{"profilePicture": "https://example.com/pic.png"}</pre>
+<p>The server will fetch the supplied URL before storing it.</p>
+{% endblock %}

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SSRF/XSS Lab</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+  nav a { margin-right: 1rem; }
+  .flash { background: #fffae6; border: 1px solid #e0c97a; padding: .5rem; margin: .5rem 0; word-break: break-all; }
+  img.avatar { max-width: 200px; max-height: 200px; border: 1px solid #ccc; }
+  label { display: block; margin-top: .75rem; }
+  input[type=text], input[type=password], textarea { width: 100%; padding: .4rem; }
+  .warn { color: #a00; font-size: .85rem; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="{{ url_for('index') }}">home</a>
+  {% if me %}
+    <a href="{{ url_for('profile', user_id=me['id']) }}">my profile</a>
+    <a href="{{ url_for('edit') }}">edit</a>
+    <a href="{{ url_for('logout') }}">logout ({{ me['username'] }})</a>
+  {% else %}
+    <a href="{{ url_for('login') }}">login</a>
+    <a href="{{ url_for('register') }}">register</a>
+  {% endif %}
+</nav>
+<hr>
+{% with messages = get_flashed_messages() %}
+  {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+{% endwith %}
+{% block content %}{% endblock %}
+<hr>
+<p class="warn">⚠ Intentionally vulnerable lab — do not expose to the internet.</p>
+</body>
+</html>

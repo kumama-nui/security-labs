@@ -1,0 +1,31 @@
+services:
+  app:
+    build: ./app
+    container_name: <lab>-app
+    ports:
+      - "50XX:5000"
+    networks:
+      - labnet
+    environment:
+      - SECRET_KEY=lab-insecure-key-do-not-use
+    restart: unless-stopped
+
+  # attacker-server:
+  #   build: ./attacker-server
+  #   container_name: <lab>-attacker
+  #   ports:
+  #     - "50XY:80"
+  #   networks:
+  #     - labnet
+
+  # internal-service:
+  #   build: ./internal-service
+  #   container_name: <lab>-internal
+  #   expose:
+  #     - "5000"
+  #   networks:
+  #     - labnet
+
+networks:
+  labnet:
+    driver: bridge
