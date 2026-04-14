@@ -1,0 +1,24 @@
+services:
+  app:
+    build: ./app
+    container_name: cspt-app
+    ports:
+      - "5083:5000"
+    networks:
+      - labnet
+    environment:
+      - SECRET_KEY=lab-insecure-key-do-not-use
+    restart: unless-stopped
+
+  attacker-server:
+    build: ./attacker-server
+    container_name: cspt-attacker
+    ports:
+      - "5084:80"
+    networks:
+      - labnet
+    restart: unless-stopped
+
+networks:
+  labnet:
+    driver: bridge

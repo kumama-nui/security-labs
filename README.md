@@ -14,6 +14,7 @@ security practice. Each lab is a directory under this repo and spins up with
 | Directory | Chain | CWE | Summary |
 |-----------|-------|-----|---------|
 | [`ssrf-to-stored-xss/`](./ssrf-to-stored-xss/) | SSRF → Stored XSS | 918 + 79 | Unvalidated profile-picture URL is fetched server-side, then rendered unescaped into `<img src>` |
+| [`cspt-to-xss/`](./cspt-to-xss/) | CSPT → DOM XSS | 22 + 79 | Front-end concatenates `location.hash` into a `fetch()` path; `../` reroutes to a reflective `/api/echo` endpoint whose response is then written to `innerHTML` |
 
 ## Layout
 
@@ -48,7 +49,8 @@ contiguous block per lab:
 | Lab | Range |
 |-----|-------|
 | `ssrf-to-stored-xss` | 5080–5082 |
-| _next lab_ | 5083–5085 |
+| `cspt-to-xss` | 5083–5084 |
+| _next lab_ | 5085–5087 |
 
 Update this table when adding a lab.
 
