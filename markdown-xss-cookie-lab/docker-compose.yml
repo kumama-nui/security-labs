@@ -1,0 +1,34 @@
+services:
+  app:
+    build: ./app
+    ports:
+      - "3000:3000"
+    networks:
+      default:
+        aliases:
+          - app.security-lab.test
+    environment:
+      PORT: "3000"
+      BOT_URL: "http://bot:5000/visit"
+      SAFE_MODE: "${SAFE_MODE:-false}"
+
+  attacker:
+    build: ./attacker
+    ports:
+      - "4000:4000"
+    networks:
+      default:
+        aliases:
+          - attacker.security-lab.test
+    environment:
+      PORT: "4000"
+
+  bot:
+    build: ./bot
+    depends_on:
+      - app
+      - attacker
+    environment:
+      PORT: "5000"
+      SAFE_MODE: "${SAFE_MODE:-false}"
+      FLAG: "FLAG{local_markdown_xss_cookie_lab}"

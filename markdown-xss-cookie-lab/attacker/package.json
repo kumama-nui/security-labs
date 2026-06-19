@@ -1,0 +1,12 @@
+{
+  "name": "markdown-xss-cookie-lab-attacker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

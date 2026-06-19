@@ -1,0 +1,15 @@
+{
+  "name": "markdown-xss-cookie-lab-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "markdown-it": "^14.1.0",
+    "sanitize-html": "^2.13.1"
+  }
+}
