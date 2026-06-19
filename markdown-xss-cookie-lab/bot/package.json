@@ -1,0 +1,13 @@
+{
+  "name": "markdown-xss-cookie-lab-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "puppeteer-core": "^24.2.1"
+  }
+}
