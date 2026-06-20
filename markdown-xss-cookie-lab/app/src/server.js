@@ -223,11 +223,15 @@ app.post("/report", async (req, res) => {
       },
       body: JSON.stringify({ url: normalized })
     });
-    const text = await botResponse.text();
+    if (!botResponse.ok) {
+      res.status(502).type("text/plain").send("bot failed to visit reported URL");
+      return;
+    }
+
     res
-      .status(botResponse.ok ? 200 : 502)
+      .status(200)
       .type("text/plain")
-      .send(`reported=${normalized}\nbot_status=${botResponse.status}\n${text}`);
+      .send("reported\ncheck /loot or the bot logs after a few seconds");
   } catch (error) {
     res.status(502).type("text/plain").send(`bot error: ${error.message}`);
   }

